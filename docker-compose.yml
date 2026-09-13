@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  # 1. Anant Full-Stack App Service
+  anant-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: anant_web_app
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://postgres:anant_secure_pass_2026@anant-postgres:5432/anant_db
+      REDIS_URL: redis://anant-redis:6379
+      JWT_SECRET: super-secret-jwt-key-change-in-production-min-32-chars
+      JWT_REFRESH_SECRET: super-secret-refresh-key-change-in-production-min-32-chars
+      OTP_EXPIRY_SECONDS: 300
+      OTP_RESEND_COOLDOWN_SECONDS: 60
+      OTP_MAX_ATTEMPTS: 3
+    depends_on:
+      anant-postgres:
+        condition: service_healthy
+      anant-redis:
+        condition: service_started
+
+  # 2. PostgreSQL 16 Database with PostGIS Extension (Geolocation Proximity)
+  anant-postgres:
+    image: postgis/postgis:16-3.4-alpine
+    container_name: anant_postgres_db
+    restart: unless-stopped
+    ports:
+      - '5432:5432'
+    environment:
+      POSTGRES_DB: anant_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: anant_secure_pass_2026
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./supabase/migrations/20260912000001_init_anant_schema.sql:/docker-entrypoint-initdb.d/01_schema.sql
+      - ./migrations/003_anant_seed_data.sql:/docker-entrypoint-initdb.d/02_seed.sql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d anant_db']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 3. Redis Service for Mobile OTP Rate-Limiting & Darshan Feed Caching
+  anant-redis:
+    image: redis:7-alpine
+    container_name: anant_redis_cache
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    volumes:
+      - redisdata:/data
+    command: redis-server --appendonly yes
+
+volumes:
+  pgdata:
+  redisdata:

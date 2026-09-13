@@ -1,0 +1,6 @@
+{
+  "name": "Anant (अनंत) - Spiritual Social Platform",
+  "description": "Multi-tenant spiritual social platform featuring verified temple trusts, deity directories, Panchang calendar, Jaap Mala rosary counter, live darshan streams, and sacred media library.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

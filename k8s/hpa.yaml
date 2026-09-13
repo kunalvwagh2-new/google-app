@@ -1,0 +1,48 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: anant-festival-autoscaler
+  namespace: production
+  labels:
+    app.kubernetes.io/name: anant-platform
+    app.kubernetes.io/component: autoscaler
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: anant-web-deployment
+  # Auto-scales dynamically between 2 baseline replicas up to 30 replicas
+  # during major Hindu festivals (Ganesh Chaturthi, Maha Shivratri, Pandharpur Wari, Diwali)
+  minReplicas: 2
+  maxReplicas: 30
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 75
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0 # Immediate scaling during sudden festival darshan surges
+      policies:
+        - type: Percent
+          value: 100 # Double replica count every 15 seconds during severe spikes
+          periodSeconds: 15
+        - type: Pods
+          value: 4
+          periodSeconds: 15
+      selectPolicy: Max
+    scaleDown:
+      stabilizationWindowSeconds: 300 # 5-minute cooloff window after festival arti concludes
+      policies:
+        - type: Percent
+          value: 20
+          periodSeconds: 60
+      selectPolicy: Min
