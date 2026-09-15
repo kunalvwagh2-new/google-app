@@ -27,6 +27,7 @@ export interface UserProfile {
   timeOfBirth?: string; // Optional TOB (HH:MM)
   placeOfBirth?: string; // Optional POB (City, State)
   tenantType?: 'DEVOTEE' | 'TEMPLE_TRUST';
+  anantTier?: 'TIER_1_DEVOTEE' | 'TIER_2_TRUST_ADMIN' | 'TIER_2B_POOJARI' | 'TIER_3_SUPER_ADMIN';
   trustName?: string;
   trustRegistrationNumber?: string;
   trustDeityName?: string;

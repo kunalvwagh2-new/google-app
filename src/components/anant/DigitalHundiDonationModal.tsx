@@ -383,6 +383,18 @@ export function DigitalHundiDonationModal({
                   </p>
                 </div>
 
+                {/* Multi-Vendor Split Payment Breakdown */}
+                <div className="p-3 bg-amber-950/30 border border-amber-500/30 rounded-2xl text-[11px] text-amber-200 text-left space-y-1">
+                  <div className="font-bold flex items-center gap-1.5 text-amber-300">
+                    <Building2 className="w-3.5 h-3.5" />
+                    <span>Multi-Vendor Split Settlement (Razorpay Route / Stripe Connect)</span>
+                  </div>
+                  <p className="text-slate-300 text-[10px] leading-relaxed">
+                    • 95% (₹{Math.round(amount * 0.95).toLocaleString('en-IN')}) is instantly routed directly to the verified Temple Trust bank account.<br/>
+                    • 5% (₹{Math.round(amount * 0.05).toLocaleString('en-IN')}) is retained as platform convenience fee.
+                  </p>
+                </div>
+
                 {/* One click mock completion */}
                 <div className="pt-2 border-t border-slate-800/80 space-y-2">
                   <button

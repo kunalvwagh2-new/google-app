@@ -1,6 +1,6 @@
 import express from 'express';
 import path from 'path';
-import { createServer as createViteServer } from 'vite';
+import fs from 'fs';
 import { apiRouter } from './src/server/routes.ts';
 import { rateLimiter, errorHandler } from './src/server/middleware.ts';
 
@@ -26,19 +26,28 @@ async function startServer() {
   // Global error handler for API
   app.use('/api', errorHandler);
 
-  // Vite middleware for development vs Static SPA in production
-  if (process.env.NODE_ENV !== 'production') {
+  // Serve compiled production SPA assets if in production or dist exists
+  const distPath = path.join(process.cwd(), 'dist');
+  const isProduction = process.env.NODE_ENV === 'production' || fs.existsSync(path.join(distPath, 'index.html'));
+
+  if (isProduction) {
+    app.use(express.static(distPath));
+    app.get('*', (_req, res) => {
+      const indexPath = path.join(distPath, 'index.html');
+      if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+      } else {
+        res.status(404).send('Application build not found.');
+      }
+    });
+  } else {
+    // Dynamic import to prevent loading Vite in production bundle
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
     });
     app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (_req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
-    });
   }
 
   app.listen(PORT, '0.0.0.0', () => {

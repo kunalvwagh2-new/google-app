@@ -34,6 +34,7 @@ import {
   ArrowRight,
   Check,
   Music,
+  Download,
 } from 'lucide-react';
 import {
   JaapGoal,
@@ -43,8 +44,16 @@ import {
   getLocalJaapReminders,
   saveLocalJaapReminders,
   logJaapSession,
+  DEITY_TYPES_PRESEED,
+  PRESEED_DEITIES,
+  PRESEED_TEMPLES_CATALOG,
+  getLocalDeityTypes,
+  getLocalDeities,
+  saveLocalDeity,
+  getLocalTemplesCatalog,
+  saveLocalTempleCatalog,
 } from '../../lib/supabase-jaap.ts';
-import { MalaProfile, TargetInputMode, TargetPeriod } from '../../types/jaap.ts';
+import { MalaProfile, TargetInputMode, TargetPeriod, DeityType, Deity, TempleCatalogEntry } from '../../types/jaap.ts';
 import { computeSmartTargets } from '../../lib/jaap-calculator.ts';
 import { templeAudio } from '../../components/anant/TempleBellAudio.ts';
 
@@ -175,12 +184,39 @@ export default function JaapMalaPage({
 
   const activeMala = malas.find((m) => m.id === activeMalaId) || malas[0] || DEFAULT_INITIAL_MALAS[0];
 
-  // Save malas to localStorage
+  // Auto-Save Indicator & Streak State
+  const [lastSavedTime, setLastSavedTime] = useState<string>(() =>
+    new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  );
+
+  const [dailyTargetBeads, setDailyTargetBeads] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('anant_jaap_daily_target_v2');
+      if (saved) return parseInt(saved, 10);
+    }
+    return 1080; // Default 10 Malas (1,080 beads)
+  });
+
+  const [streakDays, setStreakDays] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('anant_jaap_streak_days_v2');
+      if (saved) return parseInt(saved, 10);
+    }
+    return 7; // Default 7-day sadhana streak
+  });
+
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [exportToast, setExportToast] = useState<string | null>(null);
+
+  // Auto-save malas, streak, and target to localStorage
   useEffect(() => {
     if (typeof window !== 'undefined') {
       localStorage.setItem('anant_user_malas_v2', JSON.stringify(malas));
+      localStorage.setItem('anant_jaap_daily_target_v2', dailyTargetBeads.toString());
+      localStorage.setItem('anant_jaap_streak_days_v2', streakDays.toString());
+      setLastSavedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
     }
-  }, [malas]);
+  }, [malas, dailyTargetBeads, streakDays]);
 
   // Active Mala State references
   const currentBead = activeMala.currentBead;
@@ -193,6 +229,66 @@ export default function JaapMalaPage({
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [hapticEnabled, setHapticEnabled] = useState(true);
 
+  // Total Beads Chanted Today across session and active malas
+  const totalBeadsAllMalas = React.useMemo(() => {
+    return malas.reduce((acc, m) => acc + m.totalBeadsAllTime, 0);
+  }, [malas]);
+
+  const todayCompletedBeads = sessionBeads + (completedMalas * 108) + currentBead;
+  const dailyProgressPercent = Math.min(100, Math.round((todayCompletedBeads / dailyTargetBeads) * 100));
+
+  // Export Sadhana Data Handlers
+  const handleExportJSON = () => {
+    const exportData = {
+      appName: 'Anant Jaap Mala Sadhana (अनंत)',
+      exportedAt: new Date().toISOString(),
+      devoteeName: currentUserName,
+      streakDays,
+      dailyTargetBeads,
+      todayCompletedBeads,
+      totalBeadsAllTime: totalBeadsAllMalas,
+      malas,
+      reminders,
+    };
+
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `anant_jaap_sadhana_export_${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setExportToast('JSON Sadhana backup downloaded successfully!');
+    setTimeout(() => setExportToast(null), 3000);
+  };
+
+  const handleExportCSV = () => {
+    let csv = 'Mala ID,Mala Name,Deity,Current Bead,Completed Malas,Total Beads,Created At,Last Chanted\n';
+    malas.forEach((m) => {
+      csv += `"${m.id}","${m.name.replace(/"/g, '""')}","${m.deityName.replace(/"/g, '""')}",${m.currentBead},${m.completedMalas},${m.totalBeadsAllTime},"${m.createdAt}","${m.lastChantedAt}"\n`;
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `anant_jaap_malas_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setExportToast('CSV Mala log exported successfully!');
+    setTimeout(() => setExportToast(null), 3000);
+  };
+
+  const handleCopyReport = async () => {
+    const report = `🌸 *श्री अनंत जप साधना रिपोर्ट (Anant Sadhana Report)* 🌸\n\n• साधक नाव: *${currentUserName}*\n• दैनिक लक्ष्य: *${todayCompletedBeads} / ${dailyTargetBeads} मणी* (${dailyProgressPercent}% पूर्ण!)\n• नित्य साधना स्ट्रिक: *🔥 ${streakDays} दिवस*\n• एकूण जप संख्या: *${totalBeadsAllMalas.toLocaleString()} मणी*\n\n📿 *सध्याच्या माळा list:*\n${malas.map((m) => ` - ${m.name} (${m.deityName}): ${m.completedMalas} माळा (${m.totalBeadsAllTime} मणी)`).join('\n')}\n\nॐ शांति शांति शांतिः 🙏`;
+
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      await navigator.clipboard.writeText(report);
+      setExportToast('Formatted Sadhana report copied to clipboard!');
+      setTimeout(() => setExportToast(null), 3000);
+    }
+  };
+
   // Grand Celebration Overlay
   const [showCelebration, setShowCelebration] = useState(false);
   const [celebrationMalaNumber, setCelebrationMalaNumber] = useState(1);
@@ -204,6 +300,13 @@ export default function JaapMalaPage({
   const [editMantraText, setEditMantraText] = useState(activeMala.mantraText);
   const [editDeityName, setEditDeityName] = useState(activeMala.deityName);
   const [editDeityPhotoUrl, setEditDeityPhotoUrl] = useState(activeMala.deityPhotoUrl);
+
+  // Deity Types & Temples Catalog State
+  const [deityTypes] = useState<DeityType[]>(() => getLocalDeityTypes());
+  const [deitiesCatalog] = useState<Deity[]>(() => getLocalDeities());
+  const [templesCatalog] = useState<TempleCatalogEntry[]>(() => getLocalTemplesCatalog());
+  const [selectedDeityTypeId, setSelectedDeityTypeId] = useState<string>('dt_shaiva');
+  const [selectedTempleCatalogId, setSelectedTempleCatalogId] = useState<string>('');
 
   // 3. Smart Target Calculator Modal
   const [isCalculatorModalOpen, setIsCalculatorModalOpen] = useState(false);
@@ -258,10 +361,7 @@ export default function JaapMalaPage({
   const handleIncrementBead = () => {
     if (!isTimerRunning) setIsTimerRunning(true);
 
-    // Tactile Audio click
-    templeAudio.playBeadClick(soundEnabled);
-
-    // Haptic feedback
+    // Haptic feedback (Silent tap)
     if (hapticEnabled && typeof navigator !== 'undefined' && navigator.vibrate) {
       navigator.vibrate(25);
     }
@@ -549,6 +649,10 @@ export default function JaapMalaPage({
                 <span className="text-[10px] font-bold bg-amber-500 text-slate-950 px-2 py-0.5 rounded-full">
                   Multi-Mala Engine
                 </span>
+                <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/60 border border-emerald-800/60 px-2 py-0.5 rounded-full flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                  Auto-Saved ({lastSavedTime})
+                </span>
               </div>
               <p className="text-xs text-slate-400">
                 Chant mantras, shlokas, or God's name with temple bell resonance &amp; smart goals
@@ -556,7 +660,15 @@ export default function JaapMalaPage({
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+            <button
+              onClick={() => setIsExportModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-950 border border-amber-500/40 hover:border-amber-400 text-amber-300 font-bold text-xs shadow-md transition-all cursor-pointer"
+            >
+              <Download className="w-4 h-4 text-amber-400" />
+              <span>Export Mala Data</span>
+            </button>
+
             <button
               onClick={() => {
                 setEditMalaName('Shri Hanuman Chalisa Chaupai');
@@ -608,6 +720,68 @@ export default function JaapMalaPage({
               </button>
             );
           })}
+        </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* DAILY VIRTUAL PROGRESS BAR & DAILY JAAP STREAK HUD CARD */}
+      {/* ========================================================================= */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Daily Virtual Progress Bar */}
+        <div className="md:col-span-2 bg-slate-900/90 border border-slate-800 rounded-3xl p-5 shadow-xl space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Target className="w-4 h-4 text-amber-400" />
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-200">
+                Daily Sadhana Virtual Progress Bar (दैनिक जप प्रगती)
+              </h3>
+            </div>
+            <span className="text-xs font-mono font-bold text-amber-400 bg-amber-950/60 border border-amber-800/40 px-2.5 py-1 rounded-full">
+              {todayCompletedBeads} / {dailyTargetBeads} Beads ({dailyProgressPercent}%)
+            </span>
+          </div>
+
+          {/* Animated Progress Bar */}
+          <div className="w-full bg-slate-950 rounded-full h-4 border border-slate-800/80 p-0.5 overflow-hidden shadow-inner">
+            <div
+              className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-400 h-full rounded-full transition-all duration-500 ease-out shadow-lg shadow-amber-500/30"
+              style={{ width: `${dailyProgressPercent}%` }}
+            />
+          </div>
+
+          <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1">
+            <span>Target Goal: {(dailyTargetBeads / 108).toFixed(0)} Malas ({dailyTargetBeads} Beads)</span>
+            {dailyProgressPercent >= 100 ? (
+              <span className="text-emerald-400 font-bold flex items-center gap-1">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> 🎉 Daily Goal Achieved!
+              </span>
+            ) : (
+              <span className="text-amber-300 font-mono">
+                {dailyTargetBeads - todayCompletedBeads} Beads remaining today
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Daily Jaap Streak Card */}
+        <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-amber-950/40 border border-slate-800 rounded-3xl p-5 shadow-xl flex flex-col justify-between space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+              <Flame className="w-4 h-4 text-orange-500 animate-pulse" /> Daily Jaap Streak
+            </span>
+            <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-800/40">
+              Active Sadhak
+            </span>
+          </div>
+
+          <div className="flex items-baseline gap-2">
+            <span className="text-4xl font-black text-amber-400 font-mono">{streakDays}</span>
+            <span className="text-sm font-bold text-slate-300">Consecutive Days</span>
+          </div>
+
+          <p className="text-[11px] text-slate-400 leading-tight">
+            🔥 {streakDays >= 21 ? 'Tapasvi Sadhak' : streakDays >= 7 ? 'Nitya Sadhak' : 'Prarambhik Sadhak'} • Chant daily to preserve your spiritual streak.
+          </p>
         </div>
       </div>
 
@@ -704,27 +878,27 @@ export default function JaapMalaPage({
       <div className="relative py-6 flex flex-col items-center justify-center">
         <div className="relative w-80 h-80 sm:w-96 sm:h-96 flex items-center justify-center">
           {/* Circular 108 Beads SVG Ring */}
-          <svg className="absolute inset-0 w-full h-full -rotate-90 pointer-events-none">
+          <svg className="absolute inset-0 w-full h-full -rotate-90 pointer-events-none" viewBox="0 0 200 200">
             {/* Background Ring Track */}
             <circle
-              cx="50%"
-              cy="50%"
-              r="44%"
-              className="text-slate-900 stroke-current"
+              cx="100"
+              cy="100"
+              r="80"
+              className="stroke-slate-800"
               strokeWidth="12"
               fill="transparent"
             />
             {/* Active Progress Gold Arc */}
             <circle
-              cx="50%"
-              cy="50%"
-              r="44%"
-              className="text-amber-500 stroke-current transition-all duration-150"
+              cx="100"
+              cy="100"
+              r="80"
+              className="stroke-amber-500 transition-all duration-150 ease-out"
               strokeWidth="12"
+              strokeDasharray={2 * Math.PI * 80}
+              strokeDashoffset={(2 * Math.PI * 80) - (currentBead / 108) * (2 * Math.PI * 80)}
               strokeLinecap="round"
               fill="transparent"
-              strokeDasharray={2 * Math.PI * 155}
-              strokeDashoffset={2 * Math.PI * 155 * (1 - currentBead / 108)}
             />
           </svg>
 
@@ -930,7 +1104,7 @@ export default function JaapMalaPage({
       {/* ========================================================================= */}
       {isCalculatorModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="w-full max-w-lg bg-slate-950 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-5">
+          <div className="w-full max-w-lg bg-slate-950 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2">
                 <Target className="w-5 h-5 text-amber-400" />
@@ -1116,17 +1290,84 @@ export default function JaapMalaPage({
                 />
               </div>
 
-              {/* God Name */}
-              <div>
-                <label className="font-semibold text-slate-300 block mb-1">Dedicated God / Deity Name</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Lord Shiva / Lord Krishna"
-                  value={editDeityName}
-                  onChange={(e) => setEditDeityName(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-amber-500"
-                />
+              {/* Deity Category Type (deity_types schema) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="font-semibold text-slate-300 block mb-1">
+                    Deity Type / Category
+                  </label>
+                  <select
+                    value={selectedDeityTypeId}
+                    onChange={(e) => {
+                      const dtId = e.target.value;
+                      setSelectedDeityTypeId(dtId);
+                      const matchingDeity = deitiesCatalog.find((d) => d.deityTypeId === dtId);
+                      if (matchingDeity) {
+                        setEditDeityName(matchingDeity.name);
+                      }
+                    }}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-amber-300 font-bold focus:outline-none focus:border-amber-500"
+                  >
+                    {deityTypes.map((dt) => (
+                      <option key={dt.id} value={dt.id}>
+                        {dt.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="font-semibold text-slate-300 block mb-1">
+                    Verified Deity Catalog
+                  </label>
+                  <select
+                    value={editDeityName}
+                    onChange={(e) => setEditDeityName(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-amber-500"
+                  >
+                    {deitiesCatalog
+                      .filter((d) => !selectedDeityTypeId || d.deityTypeId === selectedDeityTypeId)
+                      .map((d) => (
+                        <option key={d.id} value={d.name}>
+                          {d.name} {d.isVerified ? '✓' : ''}
+                        </option>
+                      ))}
+                    <option value={editDeityName}>Custom Deity ({editDeityName || 'Enter custom'})</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Dedicated God / Deity Custom Input & Temple Catalog Link */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="font-semibold text-slate-300 block mb-1">Dedicated Deity Name</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Lord Vitthal / Kalbhairav"
+                    value={editDeityName}
+                    onChange={(e) => setEditDeityName(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-semibold text-slate-300 block mb-1">
+                    Link Temple Catalog (Optional)
+                  </label>
+                  <select
+                    value={selectedTempleCatalogId}
+                    onChange={(e) => setSelectedTempleCatalogId(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none focus:border-amber-500"
+                  >
+                    <option value="">-- No Specific Temple --</option>
+                    {templesCatalog.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name} ({t.city}, {t.state})
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               {/* Shloka / Mantra with Paste from clipboard button */}
@@ -1238,7 +1479,7 @@ export default function JaapMalaPage({
       {/* ========================================================================= */}
       {isRemindersModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-slate-950 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-4">
+          <div className="w-full max-w-md bg-slate-950 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2">
                 <Bell className="w-5 h-5 text-amber-400" />
@@ -1334,7 +1575,7 @@ export default function JaapMalaPage({
       {/* ========================================================================= */}
       {isShareModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="w-full max-w-lg bg-slate-950 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-4">
+          <div className="w-full max-w-lg bg-slate-950 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2">
                 <Share2 className="w-5 h-5 text-amber-400" />
@@ -1416,6 +1657,89 @@ export default function JaapMalaPage({
                     <Send className="w-4 h-4" /> Publish Milestone Post to Feed
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 5: EXPORT SADDHANA DATA / MALA BACKUP & REPORTS */}
+      {/* ========================================================================= */}
+      {isExportModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="w-full max-w-lg bg-slate-950 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <Download className="w-5 h-5 text-amber-400" />
+                <h3 className="font-bold text-sm text-slate-100">Export Mala Sadhana &amp; Backup Data</h3>
+              </div>
+              <button
+                onClick={() => setIsExportModalOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {exportToast && (
+              <div className="p-3 bg-emerald-950/80 border border-emerald-800 rounded-xl text-xs text-emerald-300 font-bold flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>{exportToast}</span>
+              </div>
+            )}
+
+            <p className="text-xs text-slate-400">
+              Export your Sadhana logs, active malas, streak counters, and target preferences into JSON or CSV formats for personal offline records or sharing with your Guru / Temple Trust.
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+              <button
+                onClick={handleExportJSON}
+                className="p-4 rounded-2xl bg-slate-900 hover:bg-slate-850 border border-amber-500/30 hover:border-amber-400 text-left space-y-2 cursor-pointer transition-all group"
+              >
+                <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-black text-xs group-hover:scale-110 transition-transform">
+                  JSON
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-slate-100">Full JSON Backup</h4>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Complete database &amp; settings</p>
+                </div>
+              </button>
+
+              <button
+                onClick={handleExportCSV}
+                className="p-4 rounded-2xl bg-slate-900 hover:bg-slate-850 border border-amber-500/30 hover:border-amber-400 text-left space-y-2 cursor-pointer transition-all group"
+              >
+                <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-black text-xs group-hover:scale-110 transition-transform">
+                  CSV
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-slate-100">Mala Log Sheet</h4>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Excel / Google Sheets tabular</p>
+                </div>
+              </button>
+
+              <button
+                onClick={handleCopyReport}
+                className="p-4 rounded-2xl bg-slate-900 hover:bg-slate-850 border border-amber-500/30 hover:border-amber-400 text-left space-y-2 cursor-pointer transition-all group"
+              >
+                <div className="w-8 h-8 rounded-xl bg-orange-500/20 text-orange-400 flex items-center justify-center font-black text-xs group-hover:scale-110 transition-transform">
+                  TXT
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-slate-100">Copy Text Summary</h4>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Formatted text for WhatsApp</p>
+                </div>
+              </button>
+            </div>
+
+            <div className="pt-3 border-t border-slate-800 flex justify-end">
+              <button
+                onClick={() => setIsExportModalOpen(false)}
+                className="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 font-bold text-xs cursor-pointer"
+              >
+                Close
               </button>
             </div>
           </div>

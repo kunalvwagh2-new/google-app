@@ -1,4 +1,6 @@
-import React from 'react';
+'use client';
+
+import React, { useState, useEffect } from 'react';
 import { Home, Film, Plus, Users, Landmark } from 'lucide-react';
 import { SupportedLanguage } from '../../types/anant.ts';
 
@@ -15,16 +17,34 @@ export function AnantBottomNav({
   onOpenCreatePost,
   language,
 }: AnantBottomNavProps) {
+  const [isVisible, setIsVisible] = useState(true);
+  const [lastScrollY, setLastScrollY] = useState(0);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+      if (currentScrollY > lastScrollY && currentScrollY > 80) {
+        setIsVisible(false); // Hide on scroll down
+      } else {
+        setIsVisible(true); // Show on scroll up
+      }
+      setLastScrollY(currentScrollY);
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [lastScrollY]);
+
   return (
     <nav
       id="anant-bottom-navigation"
       aria-label="Bottom Navigation"
-      className="fixed bottom-0 left-0 right-0 z-40 bg-slate-950/95 backdrop-blur-lg border-t border-slate-800/80 px-2 sm:px-6 py-2 transition-all"
+      className={`fixed bottom-0 left-0 right-0 z-40 bg-slate-950/90 backdrop-blur-md border-t border-slate-800/80 px-2 sm:px-6 py-2 transition-transform duration-300 shadow-2xl ${
+        isVisible ? 'translate-y-0' : 'translate-y-full'
+      }`}
     >
       <div className="max-w-xl mx-auto flex items-center justify-between gap-1">
-        {/* ========================================================= */}
-        {/* 1. LEFT: Home (Community feed from followed temples & friends) */}
-        {/* ========================================================= */}
+        {/* 1. Home */}
         <button
           id="anant-bottom-nav-home"
           onClick={() => onSelectTab('feed')}
@@ -40,9 +60,7 @@ export function AnantBottomNav({
           </span>
         </button>
 
-        {/* ========================================================= */}
-        {/* 2. SECOND LEFT: Shorts / Videos / Reels */}
-        {/* ========================================================= */}
+        {/* 2. Shorts / Reels */}
         <button
           id="anant-bottom-nav-shorts"
           onClick={() => onSelectTab('shorts')}
@@ -58,9 +76,7 @@ export function AnantBottomNav({
           </span>
         </button>
 
-        {/* ========================================================= */}
-        {/* 3. CENTER: Create Post (+ upload photos/videos directly or from gallery) */}
-        {/* ========================================================= */}
+        {/* 3. Center Create Post */}
         <div className="flex-1 flex items-center justify-center">
           <button
             id="anant-bottom-nav-create-post"
@@ -72,9 +88,7 @@ export function AnantBottomNav({
           </button>
         </div>
 
-        {/* ========================================================= */}
-        {/* 4. SECOND RIGHT: Friends list & management (Separate from Temples) */}
-        {/* ========================================================= */}
+        {/* 4. Friends */}
         <button
           id="anant-bottom-nav-friends"
           onClick={() => onSelectTab('friends')}
@@ -90,9 +104,7 @@ export function AnantBottomNav({
           </span>
         </button>
 
-        {/* ========================================================= */}
-        {/* 5. RIGHT: Temples Directory & Following list */}
-        {/* ========================================================= */}
+        {/* 5. Temples */}
         <button
           id="anant-bottom-nav-temples"
           onClick={() => onSelectTab('temples')}

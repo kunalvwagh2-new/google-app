@@ -1,6 +1,41 @@
 // Supabase Jaap Mala Service with Graceful LocalStorage Fallback
 // Provides fault-tolerant persistence for jaap_goals, jaap_reminders, and jaap_logs
 
+import { DeityType, Deity, TempleCatalogEntry } from '../types/jaap.ts';
+
+export const DEITY_TYPES_PRESEED: DeityType[] = [
+  { id: 'dt_shaiva', name: 'Shaiva / Lord Shiva Avatars', description: 'Lord Shiva, Kalbhairav, Hanuman, Rudra' },
+  { id: 'dt_vaishnava', name: 'Vaishnava / Lord Vishnu Avatars', description: 'Lord Rama, Lord Krishna, Vitthal, Narasimha' },
+  { id: 'dt_shakta', name: 'Shakta / Goddess Durga & Shakti', description: 'Maa Durga, Mahalakshmi, Kali, Renuka Mata' },
+  { id: 'dt_ganapatya', name: 'Ganapatya / Lord Ganesha', description: 'Lord Ganesha, Ashtavinayaka' },
+  { id: 'dt_gramadevata', name: 'Gramadevata / Local Village Deity', description: 'Khandoba, Mhatoba, Jyotiba, Bhavani' },
+  { id: 'dt_kuldevta', name: 'Kuldevta / Family Deity', description: 'Ancestral family kuldevta or kuldevi' },
+  { id: 'dt_vedic', name: 'Vedic / Ancient Scriptures', description: 'Gayatri, Surya Dev, Agni, Indra' },
+];
+
+export const PRESEED_DEITIES: Deity[] = [
+  { id: 'deity_shiva', name: 'Lord Shiva (Mahadev)', deityTypeId: 'dt_shaiva', shortDescription: 'The Supreme Yogi, Mahadeva', isVerified: true },
+  { id: 'deity_kalbhairav', name: 'Lord Kalbhairav', deityTypeId: 'dt_shaiva', shortDescription: 'Guardian Deity of Kashi & Temples', isVerified: true },
+  { id: 'deity_vitthal', name: 'Lord Vitthal (Panduranga)', deityTypeId: 'dt_vaishnava', shortDescription: 'Lord of Pandharpur & Varkaris', isVerified: true },
+  { id: 'deity_krishna', name: 'Lord Krishna', deityTypeId: 'dt_vaishnava', shortDescription: 'Supreme Personality of Godhead', isVerified: true },
+  { id: 'deity_rama', name: 'Lord Shri Rama', deityTypeId: 'dt_vaishnava', shortDescription: 'Maryada Purushottam', isVerified: true },
+  { id: 'deity_durga', name: 'Maa Durga (Adishakti)', deityTypeId: 'dt_shakta', shortDescription: 'Protector Goddess against Evil', isVerified: true },
+  { id: 'deity_ganesha', name: 'Lord Ganesha (Vighnaharta)', deityTypeId: 'dt_ganapatya', shortDescription: 'Remover of Obstacles', isVerified: true },
+  { id: 'deity_khandoba', name: 'Lord Khandoba (Martanda Bhairava)', deityTypeId: 'dt_gramadevata', shortDescription: 'Popular Gramadevata of Jejuri & Maharashtra', isVerified: true },
+  { id: 'deity_kuldevi', name: 'Shree Tulja Bhavani (Kuldevi)', deityTypeId: 'dt_kuldevta', shortDescription: 'Kuldevi of Maharashtra & Swarajya', isVerified: true },
+  { id: 'deity_gayatri', name: 'Maa Gayatri', deityTypeId: 'dt_vedic', shortDescription: 'Goddess of Vedas & Knowledge', isVerified: true },
+];
+
+export const PRESEED_TEMPLES_CATALOG: TempleCatalogEntry[] = [
+  { id: 'tmpl_trimbak', name: 'Trimbakeshwar Jyotirlinga Temple', primaryDeityId: 'deity_shiva', state: 'Maharashtra', city: 'Nashik' },
+  { id: 'tmpl_pandharpur', name: 'Vitthal Rukmini Mandir', primaryDeityId: 'deity_vitthal', state: 'Maharashtra', city: 'Pandharpur' },
+  { id: 'tmpl_kashi', name: 'Kashi Vishwanath Mandir', primaryDeityId: 'deity_shiva', state: 'Uttar Pradesh', city: 'Varanasi' },
+  { id: 'tmpl_kolhapur', name: 'Shri Mahalakshmi Mandir', primaryDeityId: 'deity_durga', state: 'Maharashtra', city: 'Kolhapur' },
+  { id: 'tmpl_dagdusheth', name: 'Shrimant Dagdusheth Halwai Ganpati Mandir', primaryDeityId: 'deity_ganesha', state: 'Maharashtra', city: 'Pune' },
+  { id: 'tmpl_jejuri', name: 'Jejuri Khandoba Mandir', primaryDeityId: 'deity_khandoba', state: 'Maharashtra', city: 'Jejuri' },
+  { id: 'tmpl_tuljapur', name: 'Shree Tulja Bhavani Mandir', primaryDeityId: 'deity_kuldevi', state: 'Maharashtra', city: 'Tuljapur' },
+];
+
 export interface JaapGoal {
   period: 'daily' | 'weekly' | 'monthly' | 'yearly';
   targetMalas: number;
@@ -184,3 +219,81 @@ export async function logJaapSession(
 
   return newLog;
 }
+
+// LocalStorage key constants for Catalog
+const CATALOG_KEYS = {
+  DEITY_TYPES: 'anant_deity_types_v1',
+  DEITIES: 'anant_deities_catalog_v1',
+  TEMPLES: 'anant_temples_catalog_v1',
+};
+
+export function getLocalDeityTypes(): DeityType[] {
+  if (typeof window === 'undefined') return DEITY_TYPES_PRESEED;
+  try {
+    const raw = localStorage.getItem(CATALOG_KEYS.DEITY_TYPES);
+    if (raw) return JSON.parse(raw);
+  } catch {
+    // fallback
+  }
+  return DEITY_TYPES_PRESEED;
+}
+
+export function getLocalDeities(): Deity[] {
+  if (typeof window === 'undefined') return PRESEED_DEITIES;
+  try {
+    const raw = localStorage.getItem(CATALOG_KEYS.DEITIES);
+    if (raw) return JSON.parse(raw);
+  } catch {
+    // fallback
+  }
+  return PRESEED_DEITIES;
+}
+
+export function saveLocalDeity(deity: Omit<Deity, 'id' | 'isVerified' | 'createdAt'>): Deity {
+  const newDeity: Deity = {
+    id: `deity_${Date.now().toString(36)}`,
+    isVerified: true, // Auto-verified in client mode
+    createdAt: new Date().toISOString(),
+    ...deity,
+  };
+  if (typeof window !== 'undefined') {
+    try {
+      const existing = getLocalDeities();
+      const updated = [newDeity, ...existing];
+      localStorage.setItem(CATALOG_KEYS.DEITIES, JSON.stringify(updated));
+    } catch {
+      // ignore
+    }
+  }
+  return newDeity;
+}
+
+export function getLocalTemplesCatalog(): TempleCatalogEntry[] {
+  if (typeof window === 'undefined') return PRESEED_TEMPLES_CATALOG;
+  try {
+    const raw = localStorage.getItem(CATALOG_KEYS.TEMPLES);
+    if (raw) return JSON.parse(raw);
+  } catch {
+    // fallback
+  }
+  return PRESEED_TEMPLES_CATALOG;
+}
+
+export function saveLocalTempleCatalog(temple: Omit<TempleCatalogEntry, 'id' | 'createdAt'>): TempleCatalogEntry {
+  const newTemple: TempleCatalogEntry = {
+    id: `tmpl_${Date.now().toString(36)}`,
+    createdAt: new Date().toISOString(),
+    ...temple,
+  };
+  if (typeof window !== 'undefined') {
+    try {
+      const existing = getLocalTemplesCatalog();
+      const updated = [newTemple, ...existing];
+      localStorage.setItem(CATALOG_KEYS.TEMPLES, JSON.stringify(updated));
+    } catch {
+      // ignore
+    }
+  }
+  return newTemple;
+}
+

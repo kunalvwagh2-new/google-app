@@ -1,8 +1,37 @@
+export interface DeityType {
+  id: string;
+  name: string;
+  description?: string;
+  createdAt?: string;
+}
+
+export interface Deity {
+  id: string;
+  name: string;
+  deityTypeId: string;
+  shortDescription?: string;
+  createdByUserId?: string;
+  isVerified: boolean;
+  createdAt?: string;
+}
+
+export interface TempleCatalogEntry {
+  id: string;
+  name: string;
+  primaryDeityId: string;
+  state: string;
+  city: string;
+  tenantId?: string;
+  createdByUserId?: string;
+  createdAt?: string;
+}
+
 export interface MalaProfile {
   id: string;
   name: string;
   mantraText: string;
   deityName: string;
+  deityTypeId?: string;
   deityPhotoUrl: string;
   currentBead: number; // 0 to 107 (108th completes)
   completedMalas: number;

@@ -12,6 +12,7 @@ import {
   Clock,
   CheckCircle2,
   ExternalLink,
+  Layers,
 } from 'lucide-react';
 import { Deity, Temple, TempleEvent, MediaItem, SupportedLanguage } from '../../types/anant.ts';
 import {
@@ -20,6 +21,7 @@ import {
   mockTempleEvents,
   mockMediaLibrary,
 } from '../../data/anantData.ts';
+import { DivineFormsView } from './DivineFormsView.tsx';
 
 interface DeityDirectoryViewProps {
   initialDeity?: Deity;
@@ -40,7 +42,7 @@ export function DeityDirectoryView({
 }: DeityDirectoryViewProps) {
   const handleRosary = onOpenRosaryForDeity || onSelectDeity || (() => {});
   const [selectedDeity, setSelectedDeity] = useState<Deity>(initialDeity || mockDeities[0]);
-  const [activeSubTab, setActiveSubTab] = useState<'TEMPLES' | 'POOJAS' | 'ARTIS' | 'NEAREST'>('TEMPLES');
+  const [activeSubTab, setActiveSubTab] = useState<'FORMS' | 'TEMPLES' | 'POOJAS' | 'ARTIS' | 'NEAREST'>('FORMS');
 
   // Filtered relations based on selected deity
   const associatedTemples = mockTemples.filter((t) => t.deityId === selectedDeity.id);
@@ -171,9 +173,20 @@ export function DeityDirectoryView({
         </div>
       </div>
 
-      {/* 3. Sub-Category Tabs: Temples | Events & Poojas | Sacred Artis & Stotras | Top Nearest */}
+      {/* 3. Sub-Category Tabs: Sacred Divine Forms | Temples | Events & Poojas | Sacred Artis & Stotras | Top Nearest */}
       <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-4 sm:p-6 shadow-xl space-y-5">
         <div className="flex items-center gap-1.5 p-1 bg-slate-950 border border-slate-800 rounded-2xl self-start overflow-x-auto">
+          <button
+            onClick={() => setActiveSubTab('FORMS')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+              activeSubTab === 'FORMS'
+                ? 'bg-amber-500 text-slate-950 shadow'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5" /> 32 Forms &amp; Avatars
+          </button>
+
           <button
             onClick={() => setActiveSubTab('TEMPLES')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
@@ -218,6 +231,16 @@ export function DeityDirectoryView({
             <MapPin className="w-3.5 h-3.5" /> Nearest Temples
           </button>
         </div>
+
+        {/* TAB 0: 32 Sacred Forms & Divine Manifestations */}
+        {activeSubTab === 'FORMS' && (
+          <DivineFormsView
+            language={language}
+            onOpenTempleForDeity={(deityId) => {
+              setActiveSubTab('TEMPLES');
+            }}
+          />
+        )}
 
         {/* TAB 1: Associated Temples */}
         {activeSubTab === 'TEMPLES' && (

@@ -22,6 +22,8 @@ import { DevOpsProductionModal } from './components/anant/DevOpsProductionModal.
 import { BlogsView } from './components/anant/BlogsView.tsx';
 import { ContinuousChantAudioPlayer } from './components/anant/ContinuousChantAudioPlayer.tsx';
 import { ShareAppModal } from './components/anant/ShareAppModal.tsx';
+import { RealtimeDarshanListener } from './components/anant/RealtimeDarshanListener.tsx';
+import { NearbyTempleAlert } from './components/anant/NearbyTempleAlert.tsx';
 import { FeatureFeedbackView } from './components/anant/FeatureFeedbackView.tsx';
 import { PostCard } from './components/PostCard.tsx';
 import { FriendsPanel } from './components/FriendsPanel.tsx';
@@ -1111,6 +1113,38 @@ export function App() {
         isOpen={isShareModalOpen}
         onClose={() => setIsShareModalOpen(false)}
         language={language}
+      />
+
+      {/* 15. REALTIME DARSHAN & 8KM GEOFENCE NOTIFICATION LISTENER */}
+      <RealtimeDarshanListener
+        language={language}
+        followedTempleIds={['temple_dagdusheth', 'temple_pandharpur']}
+        onOpenDarshan={(templeName) => {
+          setActiveTab('blogs');
+        }}
+      />
+
+      {/* 16. GEOLOCATION MONITORING & NEARBY TEMPLE (<8KM) ALERTS */}
+      <NearbyTempleAlert
+        currentTier={currentUser.profile.anantTier || 'TIER_1_DEVOTEE'}
+        onTierChange={(newTier) => {
+          setCurrentUser((prev) => ({
+            ...prev,
+            profile: {
+              ...prev.profile,
+              anantTier: newTier,
+            },
+          }));
+        }}
+        onWatchLiveDarshan={(templeId) => {
+          setActiveTab('temples');
+        }}
+        onOpenDirections={(name, city, state) => {
+          const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+            `${name}, ${city}, ${state}`
+          )}`;
+          window.open(mapsUrl, '_blank');
+        }}
       />
     </div>
   );
